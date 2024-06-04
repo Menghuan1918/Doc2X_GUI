@@ -56,6 +56,7 @@ class Ask(QWidget):
 
     def convert_to_text(self):
         self.parent.Convert()
+        self.close()
 
     def closeEvent(self, event):
         self.hide()
@@ -163,8 +164,11 @@ class OCRWidget(QWidget):
         self.ask.show()
 
     def Convert(self):
-        print("Convert")
-        pass
+        self.show()
+        pixmap = QPixmap(self.FilePath)
+        self.imageLabel.setPixmap(pixmap)
+        self.textLabel.setText("Text")
+
 
     def retranslateUi(self):
         self.setWindowTitle(self.tr("OCR Tool"))
@@ -180,7 +184,7 @@ class OCRWidget(QWidget):
         self.tray.showMessage(
             self.tr("Doc2X GUI"),
             self.tr("The program will keep running in the system tray."),
-            QSystemTrayIcon.MessageType.Information,
+            QSystemTrayIcon.MessageIcon.Information,
             3000,
         )
         event.ignore()
