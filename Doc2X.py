@@ -14,11 +14,13 @@ from PyQt6.QtCore import Qt, QCoreApplication, QEvent, QTimer
 from Clip import GetClipboard
 import imagehash
 from PIL import Image
+from PyQt6.QtWidgets import QLineEdit, QInputDialog, QMessageBox
+
 
 class Ask(QWidget):
-    def __init__(self, parent, prevClipboard, ClipTypr):
+    def __init__(self, parent, FilePath, ClipTypr):
         super().__init__()
-        self.prevClipboard = prevClipboard
+        self.FilePath = FilePath
         self.ClipTypr = ClipTypr
         self.parent = parent
         self.initUI()
@@ -28,7 +30,7 @@ class Ask(QWidget):
         self.setGeometry(100, 100, 300, 100)
         self.setWindowFlags(Qt.WindowType.WindowStaysOnTopHint)
 
-        self.label = QLabel(f"{self.prevClipboard}", self)
+        self.label = QLabel(f"{self.FilePath}", self)
 
         self.fileButton = QPushButton(self.tr("Convert to File"), self)
         self.textButton = QPushButton(self.tr("Convert to Text"), self)
@@ -40,13 +42,13 @@ class Ask(QWidget):
         layout.addWidget(self.label)
         layout.addWidget(self.fileButton)
         layout.addWidget(self.textButton)
-        
+
         self.setLayout(layout)
 
         screen_geometry = QApplication.primaryScreen().geometry()
         self.move(
             screen_geometry.width() - self.width() - 10,
-            screen_geometry.height() - self.height() - 10,
+            screen_geometry.height() - self.height() - 40,
         )
 
     def convert_to_file(self):
@@ -54,6 +56,11 @@ class Ask(QWidget):
 
     def convert_to_text(self):
         self.parent.Convert()
+
+    def closeEvent(self, event):
+        self.hide()
+        event.ignore()
+
 
 class OCRWidget(QWidget):
     def __init__(self):
@@ -71,6 +78,7 @@ class OCRWidget(QWidget):
 
         # 全局信号
         self.prevClipboard = ""  # 用于监听剪切板变化
+        self.FilePath = ""  # 用于存储文件路径
         self.ClipTypr = ""  # 剪切板文件类型状态
         self.TimeWait_flag = 3  # 用于判断是否需要等待
 
@@ -121,8 +129,12 @@ class OCRWidget(QWidget):
         pass
 
     def setAPIKey(self):
-        print("Set API Key")
-        pass
+        api, ok = QInputDialog.getText(
+            self, self.tr("Set API Key"), self.tr("API Key:")
+        )
+        if ok:
+            # Just for testings
+            QMessageBox.information(self, "API Key", f"API Key set to: {api}")
 
     def GetClipboardImage(self):
         if self.TimeWait_flag < -10:
@@ -134,6 +146,7 @@ class OCRWidget(QWidget):
         get, self.ClipTypr = GetClipboard(self.prevClipboard)
         if self.ClipTypr == "image":
             self.prevClipboard = imagehash.phash(Image.open(get))
+            self.FilePath = get
         elif self.ClipTypr != "same":
             self.prevClipboard = get
 
@@ -146,7 +159,7 @@ class OCRWidget(QWidget):
             self.showNormal()
 
     def showNotification(self, parent=None):
-        self.ask = Ask(self, self.prevClipboard, self.ClipTypr)
+        self.ask = Ask(self, self.FilePath, self.ClipTypr)
         self.ask.show()
 
     def Convert(self):
@@ -161,6 +174,16 @@ class OCRWidget(QWidget):
         self.languageMenu.setTitle(self.tr("Language"))
         self.apiKeyAction.setText(self.tr("Set API Key"))
         self.quitAction.setText(self.tr("Quit"))
+
+    def closeEvent(self, event):
+        self.hide()
+        self.tray.showMessage(
+            self.tr("Doc2X GUI"),
+            self.tr("The program will keep running in the system tray."),
+            QSystemTrayIcon.MessageType.Information,
+            3000,
+        )
+        event.ignore()
 
 
 if __name__ == "__main__":
