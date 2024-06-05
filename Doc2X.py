@@ -64,11 +64,11 @@ class Ask(QWidget):
 
 
 class OCRWidget(QWidget):
-    def __init__(self):
+    def __init__(self, General_config):
         super().__init__()
-        self.initUI()
+        self.initUI(General_config)
 
-    def initUI(self):
+    def initUI(self, General_config):
         self.setWindowTitle(self.tr("OCR Tool"))
 
         # 创建控件
@@ -121,6 +121,11 @@ class OCRWidget(QWidget):
         self.timer.timeout.connect(self.GetClipboardImage)
         self.timer.start(2000)
 
+        try:
+            self.resize(int(General_config["width"]), int(General_config["height"]))
+        except:
+            pass
+        
     def openImage(self):
         print("Open Image")
         pass
@@ -159,7 +164,7 @@ class OCRWidget(QWidget):
         if reason == QSystemTrayIcon.ActivationReason.Trigger:
             self.showNormal()
 
-    def showNotification(self, parent=None):
+    def showNotification(self):
         self.ask = Ask(self, self.FilePath, self.ClipTypr)
         self.ask.show()
 
@@ -167,8 +172,9 @@ class OCRWidget(QWidget):
         self.show()
         pixmap = QPixmap(self.FilePath)
         self.imageLabel.setPixmap(pixmap)
+        self.imageLabel.setScaledContents(True)
+        self.imageLabel.setMaximumSize(500, 400)
         self.textLabel.setText("Text")
-
 
     def retranslateUi(self):
         self.setWindowTitle(self.tr("OCR Tool"))
