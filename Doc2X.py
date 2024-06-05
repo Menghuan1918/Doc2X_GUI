@@ -9,26 +9,28 @@ from PyQt6.QtWidgets import (
     QSystemTrayIcon,
     QMenu,
 )
-from PyQt6.QtGui import QPixmap, QClipboard, QAction, QGuiApplication
+from PyQt6.QtGui import QPixmap, QClipboard, QAction, QGuiApplication, QFont
 from PyQt6.QtCore import Qt, QCoreApplication, QEvent, QTimer
 from Clip import GetClipboard
 import imagehash
 from PIL import Image
 from PyQt6.QtWidgets import QLineEdit, QInputDialog, QMessageBox
+from Tools.Config import read_config_file, change_one_config
 
 
 class Ask(QWidget):
-    def __init__(self, parent, FilePath, ClipTypr):
+    def __init__(self, parent, FilePath, ClipTypr, config):
         super().__init__()
         self.FilePath = FilePath
         self.ClipTypr = ClipTypr
         self.parent = parent
-        self.initUI()
+        self.initUI(config)
 
-    def initUI(self):
-        self.setWindowTitle("Clipboard Converter")
+    def initUI(self, config):
+        self.setWindowTitle(self.tr("File from Clipboard detected"))
         self.setGeometry(100, 100, 300, 100)
         self.setWindowFlags(Qt.WindowType.WindowStaysOnTopHint)
+        self.setFont(QFont(config["font"], int(config["font_size"])))
 
         self.label = QLabel(f"{self.FilePath}", self)
 
@@ -47,9 +49,12 @@ class Ask(QWidget):
 
         screen_geometry = QApplication.primaryScreen().geometry()
         self.move(
-            screen_geometry.width() - self.width() - 10,
-            screen_geometry.height() - self.height() - 40,
+            screen_geometry.width() - self.width() - 50,
+            screen_geometry.height() - self.height() - 400,
         )
+        self.autohide = QTimer()
+        self.autohide.timeout.connect(self.hide)
+        self.autohide.start(5000)
 
     def convert_to_file(self):
         pass
@@ -63,13 +68,14 @@ class Ask(QWidget):
         event.ignore()
 
 
+
 class OCRWidget(QWidget):
     def __init__(self, General_config):
         super().__init__()
         self.initUI(General_config)
 
     def initUI(self, General_config):
-        self.setWindowTitle(self.tr("OCR Tool"))
+        self.setWindowTitle(self.tr("Doc2X GUI"))
 
         # 创建控件
         self.imageLabel = QLabel()
@@ -125,12 +131,13 @@ class OCRWidget(QWidget):
             self.resize(int(General_config["width"]), int(General_config["height"]))
         except:
             pass
-        
+
     def openImage(self):
         print("Open Image")
         pass
 
     def copyText(self):
+        self.set_flag()
         print("Copy Text")
         pass
 
@@ -165,15 +172,24 @@ class OCRWidget(QWidget):
             self.showNormal()
 
     def showNotification(self):
-        self.ask = Ask(self, self.FilePath, self.ClipTypr)
+        self.ask = Ask(self, self.FilePath, self.ClipTypr, config)
         self.ask.show()
 
+    def set_flag(self):
+        self.TimeWait_flag = 3
+
     def Convert(self):
+        # 设置等待标志以及响应超时设置
+        self.TimeWait_flag = -100
+        self.Flag_Time_out = QTimer()
+        self.Flag_Time_out.timeout.connect(self.set_flag)
+        self.Flag_Time_out.start(30000)
+
         self.show()
         pixmap = QPixmap(self.FilePath)
         self.imageLabel.setPixmap(pixmap)
         self.imageLabel.setScaledContents(True)
-        self.imageLabel.setMaximumSize(500, 400)
+        self.imageLabel.setMaximumSize(800, 500)
         self.textLabel.setText("Text")
 
     def retranslateUi(self):
@@ -186,6 +202,7 @@ class OCRWidget(QWidget):
         self.quitAction.setText(self.tr("Quit"))
 
     def closeEvent(self, event):
+        event.ignore()
         self.hide()
         self.tray.showMessage(
             self.tr("Doc2X GUI"),
@@ -193,11 +210,25 @@ class OCRWidget(QWidget):
             QSystemTrayIcon.MessageIcon.Information,
             3000,
         )
-        event.ignore()
+
+    def changeEvent(self, event):
+        if event.type() == QEvent.Type.LanguageChange:
+            self.retranslateUi()
+        if event.type() == QEvent.Type.WindowStateChange:
+            if self.windowState() & Qt.WindowState.WindowMinimized:
+                self.hide()
+                self.tray.showMessage(
+                    self.tr("Doc2X GUI"),
+                    self.tr("The program will keep running in the system tray."),
+                    QSystemTrayIcon.MessageIcon.Information,
+                    3000,
+                )
+        super().changeEvent(event)
 
 
 if __name__ == "__main__":
+    config = read_config_file("General_config")
     app = QApplication(sys.argv)
-    ex = OCRWidget()
+    ex = OCRWidget(config)
     ex.hide()
     sys.exit(app.exec())

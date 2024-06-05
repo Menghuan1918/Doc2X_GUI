@@ -37,9 +37,9 @@ def read_config_file(filename):
         text = get_default_config(filename)
         text = text.replace("lang=en_US", f"lang={lang}")
         with open(config_file_path, "a") as file:
-            file.write(f"lang={lang}\n")
+            file.write(text)
         logging.info(f"Default config file copied to: {config_file_path}")
-        config = read_config_file()
+        config = read_config_file(filename)
     except Exception as e:
         logging.error(f"Failed to read config file: {config_file_path}, {e}")
         exit(1)
