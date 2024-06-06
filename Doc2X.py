@@ -1,4 +1,5 @@
 import sys
+import os
 from PyQt6.QtWidgets import (
     QApplication,
     QWidget,
@@ -8,14 +9,16 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QSystemTrayIcon,
     QMenu,
+    QTextEdit,
 )
-from PyQt6.QtGui import QPixmap, QClipboard, QAction, QGuiApplication, QFont
+from PyQt6.QtGui import QPixmap, QClipboard, QAction, QGuiApplication, QFont, QIcon
 from PyQt6.QtCore import Qt, QCoreApplication, QEvent, QTimer
 from Clip import GetClipboard
 import imagehash
 from PIL import Image
 from PyQt6.QtWidgets import QLineEdit, QInputDialog, QMessageBox
 from Tools.Config import read_config_file, change_one_config
+from Tools.Doc2x import get_key, file_to_file
 
 
 class Ask(QWidget):
@@ -30,7 +33,7 @@ class Ask(QWidget):
         self.setWindowTitle(self.tr("File from Clipboard detected"))
         self.setGeometry(100, 100, 300, 100)
         self.setWindowFlags(Qt.WindowType.WindowStaysOnTopHint)
-        self.setFont(QFont(config["font"], int(config["font_size"])))
+        self.setFont(QFont(config["font"], int(config["font_size"]) - 4))
 
         self.label = QLabel(f"{self.FilePath}", self)
 
@@ -48,25 +51,33 @@ class Ask(QWidget):
         self.setLayout(layout)
 
         screen_geometry = QApplication.primaryScreen().geometry()
-        self.move(
-            screen_geometry.width() - self.width() - 50,
-            screen_geometry.height() - self.height() - 400,
-        )
+        try:
+            self.move(config["Ask_x"], config["Ask_y"])
+        except:
+            self.move(
+                screen_geometry.width() - self.width() - 50,
+                screen_geometry.height() - self.height() - 400,
+            )
         self.autohide = QTimer()
         self.autohide.timeout.connect(self.hide)
         self.autohide.start(5000)
+
+    def save_config(self):
+        change_one_config(filename="General_config", key="Ask_x", value=str(self.x()))
+        change_one_config(filename="General_config", key="Ask_y", value=str(self.y()))
 
     def convert_to_file(self):
         pass
 
     def convert_to_text(self):
         self.parent.Convert()
+        self.save_config()
         self.close()
 
     def closeEvent(self, event):
+        self.save_config()
         self.hide()
         event.ignore()
-
 
 
 class OCRWidget(QWidget):
@@ -79,7 +90,7 @@ class OCRWidget(QWidget):
 
         # 创建控件
         self.imageLabel = QLabel()
-        self.textLabel = QLabel()
+        self.textLabel = QTextEdit()
         self.openButton = QPushButton(self.tr("Select Image"))
         self.copyButton = QPushButton(self.tr("Copy Text"))
 
@@ -88,6 +99,8 @@ class OCRWidget(QWidget):
         self.FilePath = ""  # 用于存储文件路径
         self.ClipTypr = ""  # 剪切板文件类型状态
         self.TimeWait_flag = 3  # 用于判断是否需要等待
+        self.API_Key = ""  # 用于存储API Key
+        self.Key_Valid = False  # 用于判断API Key是否有效
 
         # 布局
         hbox = QHBoxLayout()
@@ -107,6 +120,7 @@ class OCRWidget(QWidget):
 
         # 创建系统托盘图标
         self.tray = QSystemTrayIcon(self)
+        self.tray.setIcon(QIcon("icon.png"))
         self.tray.setVisible(True)
         self.tray.activated.connect(self.onTrayActivated)
 
@@ -127,6 +141,9 @@ class OCRWidget(QWidget):
         self.timer.timeout.connect(self.GetClipboardImage)
         self.timer.start(2000)
 
+        # 检查API Key
+        self.CheckAPIKey()
+
         try:
             self.resize(int(General_config["width"]), int(General_config["height"]))
         except:
@@ -142,12 +159,42 @@ class OCRWidget(QWidget):
         pass
 
     def setAPIKey(self):
-        api, ok = QInputDialog.getText(
-            self, self.tr("Set API Key"), self.tr("API Key:")
-        )
+        try:
+            api, ok = QInputDialog.getText(
+                self,
+                self.tr("Set API Key"),
+                self.tr("API Key:"),
+                text=config["API_Key"],
+            )
+        except:
+            api, ok = QInputDialog.getText(
+                self, self.tr("Set API Key"), self.tr("API Key:")
+            )
         if ok:
-            # Just for testings
-            QMessageBox.information(self, "API Key", f"API Key set to: {api}")
+            change_one_config(filename="General_config", key="API_Key", value=api)
+            self.CheckAPIKey()
+
+    def CheckAPIKey(self):
+        try:
+            self.API_Key = get_key(config["API_Key"])
+            if self.API_Key == None:
+                raise Exception
+            self.Key_Valid = True
+            self.tray.showMessage(
+                self.tr("Doc2X GUI"),
+                self.tr("API key validation successful"),
+                QSystemTrayIcon.MessageIcon.Information,
+                3000,
+            )
+        except:
+            self.API_Key = None
+            QMessageBox.critical(
+                self,
+                self.tr("Error"),
+                self.tr(
+                    "The API key acquisition exception may be caused by the key not being set or expired. Please right-click the taskbar icon and select 'Set API Key'."
+                ),
+            )
 
     def GetClipboardImage(self):
         if self.TimeWait_flag < -10:
@@ -159,11 +206,11 @@ class OCRWidget(QWidget):
         get, self.ClipTypr = GetClipboard(self.prevClipboard)
         if self.ClipTypr == "image":
             self.prevClipboard = imagehash.phash(Image.open(get))
-            self.FilePath = get
         elif self.ClipTypr != "same":
             self.prevClipboard = get
 
         if self.ClipTypr != "same" and self.ClipTypr != "text":
+            self.FilePath = get
             self.TimeWait_flag = 0
             self.showNotification()
 
@@ -176,7 +223,9 @@ class OCRWidget(QWidget):
         self.ask.show()
 
     def set_flag(self):
+        # 等待超时恢复
         self.TimeWait_flag = 3
+        self.Block()
 
     def Convert(self):
         # 设置等待标志以及响应超时设置
@@ -189,8 +238,21 @@ class OCRWidget(QWidget):
         pixmap = QPixmap(self.FilePath)
         self.imageLabel.setPixmap(pixmap)
         self.imageLabel.setScaledContents(True)
-        self.imageLabel.setMaximumSize(800, 500)
-        self.textLabel.setText("Text")
+        self.imageLabel.setMaximumSize(600, 400)
+        self.textLabel.setText(self.tr("Converting...Please wait."))
+        self.textLabel.setFixedSize(500, 400)
+        self.Block()
+
+    def Block(self):
+        # 在等待标志为处理中时锁定所有按钮
+        if self.TimeWait_flag < -10:
+            self.openButton.setEnabled(False)
+            self.copyButton.setEnabled(False)
+            self.textLabel.setEnabled(False)
+        else:
+            self.openButton.setEnabled(True)
+            self.copyButton.setEnabled(True)
+            self.textLabel.setEnabled(True)
 
     def retranslateUi(self):
         self.setWindowTitle(self.tr("OCR Tool"))
