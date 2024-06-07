@@ -22,7 +22,7 @@ def file_to_file(file, outputtype, key):
         elif file.endswith(".jpg") or file.endswith(".jpeg") or file.endswith(".png"):
             return pic2file(
                 api_key=key,
-                file=file,
+                image_file=file,
                 output_path=os.path.expanduser("~") + "/Downloads",
                 output_format=outputtype,
             )

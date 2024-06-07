@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import (
     QTextEdit,
 )
 from PyQt6.QtGui import QPixmap, QClipboard, QAction, QGuiApplication, QFont, QIcon
-from PyQt6.QtCore import Qt, QCoreApplication, QEvent, QTimer
+from PyQt6.QtCore import Qt, QCoreApplication, QEvent, QTimer, QObject, pyqtSignal,QRunnable,QThreadPool
 from Clip import GetClipboard
 import imagehash
 from PIL import Image
@@ -20,7 +20,22 @@ from PyQt6.QtWidgets import QLineEdit, QInputDialog, QMessageBox
 from Tools.Config import read_config_file, change_one_config
 from Tools.Doc2x import get_key, file_to_file
 
+# 信号类
+class Doc2X_Single(QObject):
+    Get = pyqtSignal(int, str)
 
+class Doc2X(QRunnable):
+    def __init__(self, file, outputtype, key):
+        super().__init__()
+        self.parent = Doc2X_Single()
+        self.file = file
+        self.outputtype = outputtype
+        self.key = key
+
+    def run(self):
+        self.parent.Get.emit(1, file_to_file(self.file, self.outputtype, self.key))
+
+# 询问窗口
 class Ask(QWidget):
     def __init__(self, parent, FilePath, ClipTypr, config):
         super().__init__()
@@ -33,7 +48,7 @@ class Ask(QWidget):
         self.setWindowTitle(self.tr("File from Clipboard detected"))
         self.setGeometry(100, 100, 300, 100)
         self.setWindowFlags(Qt.WindowType.WindowStaysOnTopHint)
-        self.setFont(QFont(config["font"], int(config["font_size"]) - 4))
+        self.setFont(QFont(config["font"], int(config["font_size"]) - 2))
 
         self.label = QLabel(f"{self.FilePath}", self)
 
@@ -79,7 +94,7 @@ class Ask(QWidget):
         self.hide()
         event.ignore()
 
-
+# 主窗口
 class OCRWidget(QWidget):
     def __init__(self, General_config):
         super().__init__()
@@ -88,9 +103,16 @@ class OCRWidget(QWidget):
     def initUI(self, General_config):
         self.setWindowTitle(self.tr("Doc2X GUI"))
 
+        self.setFont(
+            QFont(General_config["font"], int(General_config["font_size"]) - 2)
+        )
+        self.setWindowIcon(QIcon("icon.png"))
         # 创建控件
         self.imageLabel = QLabel()
         self.textLabel = QTextEdit()
+        self.textLabel.setFont(
+            QFont(General_config["font"], int(General_config["font_size"]))
+        )
         self.openButton = QPushButton(self.tr("Select Image"))
         self.copyButton = QPushButton(self.tr("Copy Text"))
 
@@ -101,6 +123,7 @@ class OCRWidget(QWidget):
         self.TimeWait_flag = 3  # 用于判断是否需要等待
         self.API_Key = ""  # 用于存储API Key
         self.Key_Valid = False  # 用于判断API Key是否有效
+        self.Listen = True  # 用于判断是否需要监听剪切板
 
         # 布局
         hbox = QHBoxLayout()
@@ -140,6 +163,7 @@ class OCRWidget(QWidget):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.GetClipboardImage)
         self.timer.start(2000)
+        self.threadpool = QThreadPool()
 
         # 检查API Key
         self.CheckAPIKey()
@@ -217,6 +241,7 @@ class OCRWidget(QWidget):
     def onTrayActivated(self, reason):
         if reason == QSystemTrayIcon.ActivationReason.Trigger:
             self.showNormal()
+            self.TimeWait_flag = -100
 
     def showNotification(self):
         self.ask = Ask(self, self.FilePath, self.ClipTypr, config)
@@ -232,7 +257,7 @@ class OCRWidget(QWidget):
         self.TimeWait_flag = -100
         self.Flag_Time_out = QTimer()
         self.Flag_Time_out.timeout.connect(self.set_flag)
-        self.Flag_Time_out.start(30000)
+        self.Flag_Time_out.start(45000)
 
         self.show()
         pixmap = QPixmap(self.FilePath)
@@ -241,6 +266,15 @@ class OCRWidget(QWidget):
         self.imageLabel.setMaximumSize(600, 400)
         self.textLabel.setText(self.tr("Converting...Please wait."))
         self.textLabel.setFixedSize(500, 400)
+        self.Block()
+        Doc2X_Process = Doc2X(self.FilePath, "text", self.API_Key)
+        Doc2X_Process.parent.Get.connect(self.Update_process)
+        self.threadpool.start(Doc2X_Process)
+
+    #! 由于进度传递还没有实现，所以暂时不使用
+    def Update_process(self, pocess, text):
+        self.textLabel.setText(text)
+        self.TimeWait_flag = 3
         self.Block()
 
     def Block(self):
@@ -266,6 +300,7 @@ class OCRWidget(QWidget):
     def closeEvent(self, event):
         event.ignore()
         self.hide()
+        self.TimeWait_flag = 3
         self.tray.showMessage(
             self.tr("Doc2X GUI"),
             self.tr("The program will keep running in the system tray."),
@@ -279,6 +314,7 @@ class OCRWidget(QWidget):
         if event.type() == QEvent.Type.WindowStateChange:
             if self.windowState() & Qt.WindowState.WindowMinimized:
                 self.hide()
+                self.TimeWait_flag = 3
                 self.tray.showMessage(
                     self.tr("Doc2X GUI"),
                     self.tr("The program will keep running in the system tray."),
