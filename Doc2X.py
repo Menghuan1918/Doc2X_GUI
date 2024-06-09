@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
     QMenu,
     QTextEdit,
     QProgressBar,
+    QFileDialog,
 )
 from PyQt6.QtGui import QPixmap, QClipboard, QAction, QGuiApplication, QFont, QIcon
 from PyQt6.QtCore import (
@@ -29,7 +30,8 @@ from PIL import Image
 from PyQt6.QtWidgets import QLineEdit, QInputDialog, QMessageBox
 from Tools.Config import read_config_file, change_one_config
 from Tools.Doc2x import get_key, file_to_file
-import shutil
+import logging
+import os
 
 
 # 信号类
@@ -47,11 +49,13 @@ class Doc2X(QRunnable):
         self.temp_path = temp_path
 
     def run(self):
+        outputtype = self.outputtype
+        outputtype = "md_dollar" if outputtype == "text" else outputtype
         for process, text in file_to_file(
-            self.file, self.outputtype, self.key, self.temp_path
+            self.file, outputtype, self.key, self.temp_path
         ):
             self.parent.Get.emit(process, text)
-            print(process, text)
+            logging.info(f"Process: {process}, Text: {text}")
 
 
 # 询问窗口
@@ -101,10 +105,23 @@ class Ask(QWidget):
         change_one_config(filename="General_config", key="Ask_y", value=str(self.y()))
 
     def convert_to_file(self):
-        pass
+        self.autohide.stop()
+        items = ["docx", "md", "md_dollar", "latex"]
+        item, ok = QInputDialog.getItem(
+            self,
+            self.tr("Output Format"),
+            self.tr("Select output format:"),
+            items,
+            0,
+            False,
+        )
+        if ok and item:
+            self.parent.Convert(item)
+        self.save_config()
+        self.close()
 
     def convert_to_text(self):
-        self.parent.Convert()
+        self.parent.Convert("text")
         self.save_config()
         self.close()
 
@@ -129,12 +146,11 @@ class OCRWidget(QWidget):
         self.setWindowIcon(QIcon("icon.png"))
         # 创建控件
         self.imageLabel = QLabel()
-        self.imageLabel.setMinimumSize(200, 200)
         self.textLabel = QTextEdit()
         self.textLabel.setFont(
             QFont(General_config["font"], int(General_config["font_size"]))
         )
-        self.openButton = QPushButton(self.tr("Select Image"))
+        self.openButton = QPushButton(self.tr("Select File"))
         self.copyButton = QPushButton(self.tr("Copy Text"))
         self.progressBar = QProgressBar()
         self.progressBar.setRange(0, 100)
@@ -202,8 +218,25 @@ class OCRWidget(QWidget):
             pass
 
     def openImage(self):
-        print("Open Image")
-        pass
+        # 仅允许jpg，png和pdf文件
+        file_accept = "Image files (*.jpg *.png *.jpeg);;PDF files (*.pdf)"
+        file, _ = QFileDialog.getOpenFileName(
+            self, self.tr("Open File"), "", file_accept
+        )
+        if file:
+            self.FilePath = file
+            items = ["docx", "md", "md_dollar", "latex"]
+            item, ok = QInputDialog.getItem(
+                self,
+                self.tr("Output Format"),
+                self.tr("Select output format:"),
+                items,
+                0,
+                False,
+            )
+            if ok and item:
+                self.outputtype = item
+                self.Convert(item)
 
     def copyText(self):
         self.set_flag()
@@ -224,6 +257,7 @@ class OCRWidget(QWidget):
             )
         if ok:
             change_one_config(filename="General_config", key="API_Key", value=api)
+            config = read_config_file("General_config")
             self.CheckAPIKey()
 
     def CheckAPIKey(self):
@@ -256,6 +290,7 @@ class OCRWidget(QWidget):
             return
 
         get, self.ClipTypr = GetClipboard(self.prevClipboard)
+        print(get, self.ClipTypr)
         if self.ClipTypr == "image":
             self.prevClipboard = imagehash.phash(Image.open(get))
         elif self.ClipTypr != "same":
@@ -280,15 +315,20 @@ class OCRWidget(QWidget):
         self.TimeWait_flag = 3
         self.Block()
 
-    def Convert(self):
+    def Convert(self, outputtype):
         # 设置等待标志以及响应超时设置
         self.TimeWait_flag = -100
         self.Flag_Time_out = QTimer()
         self.Flag_Time_out.timeout.connect(self.set_flag)
         self.Flag_Time_out.start(45000)
 
+        self.outputtype = str(outputtype)
         self.show()
-        pixmap = QPixmap(self.FilePath)
+        if self.FilePath.endswith(".pdf"):
+            pixmap = QPixmap("pdf.png")
+        else:
+            pixmap = QPixmap(self.FilePath)
+        pixmap = pixmap.scaled(600, 400, Qt.AspectRatioMode.KeepAspectRatio)
         self.imageLabel.setPixmap(pixmap)
         self.imageLabel.setScaledContents(True)
         self.imageLabel.setMaximumSize(600, 400)
@@ -297,7 +337,7 @@ class OCRWidget(QWidget):
         self.Block()
         temp_path = os.path.expanduser("~") + "/.cache/Doc2X_GUI"
         os.makedirs(temp_path, exist_ok=True)
-        Doc2X_Process = Doc2X(self.FilePath, "md_dollar", self.API_Key, temp_path)
+        Doc2X_Process = Doc2X(self.FilePath, self.outputtype, self.API_Key, temp_path)
         Doc2X_Process.parent.Get.connect(self.Update_process)
         self.threadpool.start(Doc2X_Process)
 
@@ -307,18 +347,24 @@ class OCRWidget(QWidget):
         if pocess >= 0 and pocess <= 100:
             self.progressBar.setValue(pocess)
         elif pocess > 100:
-            try:
-                path = f"{text}/{os.path.basename(text)}.md"
-                with open(path, "r") as f:
-                    self.textLabel.setText(f.read())
-            except Exception as e:
-                self.textLabel.setText(str(e))
-            self.TimeWait_flag = 3
-            self.Block()
+            if self.outputtype == "text":
+                try:
+                    path = f"{text}/{os.path.basename(text)}.md"
+                    with open(path, "r") as f:
+                        self.textLabel.setText(f.read())
+                except Exception as e:
+                    self.textLabel.setText(str(e))
+            else:
+                self.textLabel.setText(self.tr("Conversion completed."))
+                try:
+                    if os.name == "nt":
+                        os.system(f"start {text}")
+                    else:
+                        os.system(f"xdg-open {text}")
+                except Exception as e:
+                    logging.error(e)
         else:
             self.textLabel.setText(f"Error: {text}")
-            self.TimeWait_flag = 3
-            self.Block()
 
     def Block(self):
         # 在等待标志为处理中时锁定所有按钮
@@ -344,6 +390,7 @@ class OCRWidget(QWidget):
         event.ignore()
         self.hide()
         self.TimeWait_flag = 3
+        self.Block()
         self.tray.showMessage(
             self.tr("Doc2X GUI"),
             self.tr("The program will keep running in the system tray."),
@@ -358,6 +405,7 @@ class OCRWidget(QWidget):
             if self.windowState() & Qt.WindowState.WindowMinimized:
                 self.hide()
                 self.TimeWait_flag = 3
+                self.Block()
                 self.tray.showMessage(
                     self.tr("Doc2X GUI"),
                     self.tr("The program will keep running in the system tray."),
