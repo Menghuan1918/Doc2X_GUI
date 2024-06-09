@@ -134,22 +134,23 @@ class Ask(QWidget):
 
 # 主窗口
 class OCRWidget(QWidget):
-    def __init__(self, General_config):
+    def __init__(self):
         super().__init__()
-        self.initUI(General_config)
+        self.initUI()
 
-    def initUI(self, General_config):
+    def initUI(self):
+        self.General_config = read_config_file("General_config")
         self.setWindowTitle(self.tr("Doc2X GUI"))
 
         self.setFont(
-            QFont(General_config["font"], int(General_config["font_size"]) - 2)
+            QFont(self.General_config["font"], int(self.General_config["font_size"]) - 2)
         )
         self.setWindowIcon(QIcon("icon.png"))
         # 创建控件
         self.imageLabel = QLabel()
         self.textLabel = QTextEdit()
         self.textLabel.setFont(
-            QFont(General_config["font"], int(General_config["font_size"]))
+            QFont(self.General_config["font"], int(self.General_config["font_size"]))
         )
         self.openButton = QPushButton(self.tr("Select File"))
         self.copyButton = QPushButton(self.tr("Copy Text"))
@@ -214,7 +215,7 @@ class OCRWidget(QWidget):
         self.CheckAPIKey()
 
         try:
-            self.resize(int(General_config["width"]), int(General_config["height"]))
+            self.resize(int(self.General_config["width"]), int(self.General_config["height"]))
         except:
             pass
 
@@ -250,7 +251,7 @@ class OCRWidget(QWidget):
                 self,
                 self.tr("Set API Key"),
                 self.tr("API Key:"),
-                text=config["API_Key"],
+                text=self.General_config["API_Key"],
             )
         except:
             api, ok = QInputDialog.getText(
@@ -258,12 +259,12 @@ class OCRWidget(QWidget):
             )
         if ok:
             change_one_config(filename="General_config", key="API_Key", value=api)
-            config = read_config_file("General_config")
+            self.General_config = read_config_file("General_config")
             self.CheckAPIKey()
 
     def CheckAPIKey(self):
         try:
-            self.API_Key = get_key(config["API_Key"])
+            self.API_Key = get_key(self.General_config["API_Key"])
             if self.API_Key == None:
                 raise Exception
             self.Key_Valid = True
@@ -273,6 +274,7 @@ class OCRWidget(QWidget):
                 QSystemTrayIcon.MessageIcon.Information,
                 3000,
             )
+            self.TimeWait_flag = 3
         except:
             self.API_Key = None
             QMessageBox.critical(
@@ -282,6 +284,7 @@ class OCRWidget(QWidget):
                     "The API key acquisition exception may be caused by the key not being set or expired. Please right-click the taskbar icon and select 'Set API Key'."
                 ),
             )
+            self.TimeWait_flag = -100
 
     def GetClipboardImage(self):
         if self.TimeWait_flag < -10:
@@ -317,7 +320,7 @@ class OCRWidget(QWidget):
             self.TimeWait_flag = -100
 
     def showNotification(self):
-        self.ask = Ask(self, self.FilePath, self.ClipTypr, config)
+        self.ask = Ask(self, self.FilePath, self.ClipTypr, self.General_config)
         self.ask.show()
 
     def set_flag(self):
@@ -428,6 +431,6 @@ class OCRWidget(QWidget):
 if __name__ == "__main__":
     config = read_config_file("General_config")
     app = QApplication(sys.argv)
-    ex = OCRWidget(config)
+    ex = OCRWidget()
     ex.hide()
     sys.exit(app.exec())
