@@ -1,4 +1,4 @@
-from pdfdeal.doc2x import refresh_key, pdf2file,pic2file
+from Tools.Doc2x_API import refresh_key, pic2file, pdf2file
 import os
 
 
@@ -9,22 +9,26 @@ def get_key(key):
         return None
 
 
-def file_to_file(file, outputtype, key):
+def file_to_file(file, outputtype, key, path=None):
+    if path == None:
+        path = os.path.expanduser("~") + "/Downloads"
     try:
         if file.endswith(".pdf"):
-            return pdf2file(
+            for process, message in pdf2file(
                 api_key=key,
                 file=file,
-                output_path=os.path.expanduser("~") + "/Downloads",
+                output_path=path,
                 output_format=outputtype,
-            )
+            ):
+                yield process, message
 
         elif file.endswith(".jpg") or file.endswith(".jpeg") or file.endswith(".png"):
-            return pic2file(
+            for process, message in pic2file(
                 api_key=key,
                 image_file=file,
-                output_path=os.path.expanduser("~") + "/Downloads",
+                output_path=path,
                 output_format=outputtype,
-            )
+            ):
+                yield process, message
     except Exception as e:
-        return f"Error: {e}"
+        yield -100, f"Error: {e}"

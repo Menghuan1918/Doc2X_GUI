@@ -10,30 +10,49 @@ from PyQt6.QtWidgets import (
     QSystemTrayIcon,
     QMenu,
     QTextEdit,
+    QProgressBar,
 )
 from PyQt6.QtGui import QPixmap, QClipboard, QAction, QGuiApplication, QFont, QIcon
-from PyQt6.QtCore import Qt, QCoreApplication, QEvent, QTimer, QObject, pyqtSignal,QRunnable,QThreadPool
+from PyQt6.QtCore import (
+    Qt,
+    QCoreApplication,
+    QEvent,
+    QTimer,
+    QObject,
+    pyqtSignal,
+    QRunnable,
+    QThreadPool,
+)
 from Clip import GetClipboard
 import imagehash
 from PIL import Image
 from PyQt6.QtWidgets import QLineEdit, QInputDialog, QMessageBox
 from Tools.Config import read_config_file, change_one_config
 from Tools.Doc2x import get_key, file_to_file
+import shutil
+
 
 # 信号类
 class Doc2X_Single(QObject):
     Get = pyqtSignal(int, str)
 
+
 class Doc2X(QRunnable):
-    def __init__(self, file, outputtype, key):
+    def __init__(self, file, outputtype, key, temp_path):
         super().__init__()
         self.parent = Doc2X_Single()
         self.file = file
         self.outputtype = outputtype
         self.key = key
+        self.temp_path = temp_path
 
     def run(self):
-        self.parent.Get.emit(1, file_to_file(self.file, self.outputtype, self.key))
+        for process, text in file_to_file(
+            self.file, self.outputtype, self.key, self.temp_path
+        ):
+            self.parent.Get.emit(process, text)
+            print(process, text)
+
 
 # 询问窗口
 class Ask(QWidget):
@@ -94,6 +113,7 @@ class Ask(QWidget):
         self.hide()
         event.ignore()
 
+
 # 主窗口
 class OCRWidget(QWidget):
     def __init__(self, General_config):
@@ -109,12 +129,17 @@ class OCRWidget(QWidget):
         self.setWindowIcon(QIcon("icon.png"))
         # 创建控件
         self.imageLabel = QLabel()
+        self.imageLabel.setMinimumSize(200, 200)
         self.textLabel = QTextEdit()
         self.textLabel.setFont(
             QFont(General_config["font"], int(General_config["font_size"]))
         )
         self.openButton = QPushButton(self.tr("Select Image"))
         self.copyButton = QPushButton(self.tr("Copy Text"))
+        self.progressBar = QProgressBar()
+        self.progressBar.setRange(0, 100)
+        self.progressBar.setValue(0)
+        self.progressBar.setTextVisible(True)
 
         # 全局信号
         self.prevClipboard = ""  # 用于监听剪切板变化
@@ -126,15 +151,18 @@ class OCRWidget(QWidget):
         self.Listen = True  # 用于判断是否需要监听剪切板
 
         # 布局
-        hbox = QHBoxLayout()
-        imageVBox = QVBoxLayout()
-        imageVBox.addWidget(self.imageLabel)
-        imageVBox.addWidget(self.openButton)
-        textVBox = QVBoxLayout()
-        textVBox.addWidget(self.textLabel)
-        textVBox.addWidget(self.copyButton)
-        hbox.addLayout(imageVBox)
-        hbox.addLayout(textVBox)
+        hbox = QVBoxLayout()
+        layout_1 = QHBoxLayout()
+        layout_1.addWidget(self.imageLabel)
+        layout_1.addWidget(self.textLabel)
+        layout_2 = QHBoxLayout()
+        layout_2.addWidget(self.progressBar)
+        layout_3 = QHBoxLayout()
+        layout_3.addWidget(self.openButton)
+        layout_3.addWidget(self.copyButton)
+        hbox.addLayout(layout_1)
+        hbox.addLayout(layout_2)
+        hbox.addLayout(layout_3)
         self.setLayout(hbox)
 
         # 连接信号和槽
@@ -267,15 +295,30 @@ class OCRWidget(QWidget):
         self.textLabel.setText(self.tr("Converting...Please wait."))
         self.textLabel.setFixedSize(500, 400)
         self.Block()
-        Doc2X_Process = Doc2X(self.FilePath, "text", self.API_Key)
+        temp_path = os.path.expanduser("~") + "/.cache/Doc2X_GUI"
+        os.makedirs(temp_path, exist_ok=True)
+        Doc2X_Process = Doc2X(self.FilePath, "md_dollar", self.API_Key, temp_path)
         Doc2X_Process.parent.Get.connect(self.Update_process)
         self.threadpool.start(Doc2X_Process)
 
-    #! 由于进度传递还没有实现，所以暂时不使用
     def Update_process(self, pocess, text):
-        self.textLabel.setText(text)
-        self.TimeWait_flag = 3
-        self.Block()
+        if text != "":
+            self.textLabel.setText(text)
+        if pocess >= 0 and pocess <= 100:
+            self.progressBar.setValue(pocess)
+        elif pocess > 100:
+            try:
+                path = f"{text}/{os.path.basename(text)}.md"
+                with open(path, "r") as f:
+                    self.textLabel.setText(f.read())
+            except Exception as e:
+                self.textLabel.setText(str(e))
+            self.TimeWait_flag = 3
+            self.Block()
+        else:
+            self.textLabel.setText(f"Error: {text}")
+            self.TimeWait_flag = 3
+            self.Block()
 
     def Block(self):
         # 在等待标志为处理中时锁定所有按钮
