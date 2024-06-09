@@ -31,19 +31,26 @@ def get_file_path():
     return image_path
 
 
-#! Not Finished
 def Windows_pic(pretext):
+    text = "None"
+    Clip_type = "text"
     try:
         image = ImageGrab.grabclipboard()
         if image is not None:
             image_path = get_file_path()
             image.save(image_path)
-            logging.info(f"Clipboard image saved to {image_path}")
+            if same_image(image_path, pretext):
+                Clip_type = "same"
+                os.remove(image_path)
+            else:
+                Clip_type = "image"
+                text = image_path
         else:
             text = pyperclip.paste()
     except:
         text = pyperclip.paste()
-    return text
+
+    return text, Clip_type
 
 
 def Linux_pic(pretext):

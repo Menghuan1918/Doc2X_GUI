@@ -221,7 +221,7 @@ class OCRWidget(QWidget):
 
     def openImage(self):
         # 仅允许jpg，png和pdf文件
-        file_accept = "Image files (*.jpg *.png *.jpeg);;PDF files (*.pdf)"
+        file_accept = "All accept files (*.jpg *.png *.jpeg *.pdf)"
         file, _ = QFileDialog.getOpenFileName(
             self, self.tr("Open File"), "", file_accept
         )
@@ -277,6 +277,7 @@ class OCRWidget(QWidget):
             self.TimeWait_flag = 3
         except:
             self.API_Key = None
+            self.TimeWait_flag = -100
             QMessageBox.critical(
                 self,
                 self.tr("Error"),
@@ -284,7 +285,7 @@ class OCRWidget(QWidget):
                     "The API key acquisition exception may be caused by the key not being set or expired. Please right-click the taskbar icon and select 'Set API Key'."
                 ),
             )
-            self.TimeWait_flag = -100
+            
 
     def GetClipboardImage(self):
         if self.TimeWait_flag < -10:
@@ -348,7 +349,10 @@ class OCRWidget(QWidget):
         self.textLabel.setText(self.tr("Converting...Please wait."))
         self.textLabel.setFixedSize(500, 400)
         self.Block()
-        temp_path = os.path.expanduser("~") + "/.cache/Doc2X_GUI"
+        if self.outputtype == "text":
+            temp_path = os.path.expanduser("~") + "/.cache/Doc2X_GUI"
+        else:
+            temp_path = os.path.expanduser("~") + "/Downloads/Doc2X_GUI"
         os.makedirs(temp_path, exist_ok=True)
         Doc2X_Process = Doc2X(self.FilePath, self.outputtype, self.API_Key, temp_path)
         Doc2X_Process.parent.Get.connect(self.Update_process)
@@ -364,7 +368,11 @@ class OCRWidget(QWidget):
                 try:
                     path = f"{text}/{os.path.basename(text)}.md"
                     with open(path, "r") as f:
-                        self.textLabel.setText(f.read())
+                        get_text = f.read()
+                    get_text = str(get_text)
+                    self.textLabel.setText(get_text)
+                    self.TimeWait_flag = -20 #解锁按钮但是不恢复监听
+                    self.Block()
                 except Exception as e:
                     self.textLabel.setText(str(e))
             else:
@@ -374,14 +382,17 @@ class OCRWidget(QWidget):
                         os.system(f"start {text}")
                     else:
                         os.system(f"xdg-open {text}")
+                    self.TimeWait_flag = 3
+                    self.Block()
+                    self.hide()
                 except Exception as e:
                     logging.error(e)
         else:
             self.textLabel.setText(f"Error: {text}")
 
     def Block(self):
-        # 在等待标志为处理中时锁定所有按钮
-        if self.TimeWait_flag < -10:
+        # 在等待标志为处理中时锁定所有按钮(设置为-50是因为有处理完当前图片后的等待复制的空间)
+        if self.TimeWait_flag < -50:
             self.openButton.setEnabled(False)
             self.copyButton.setEnabled(False)
             self.textLabel.setEnabled(False)

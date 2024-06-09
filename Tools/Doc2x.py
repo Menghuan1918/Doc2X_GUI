@@ -16,7 +16,7 @@ def file_to_file(file, outputtype, key, path=None):
         if file.endswith(".pdf"):
             for process, message in pdf2file(
                 api_key=key,
-                file=file,
+                pdf_file=file,
                 output_path=path,
                 output_format=outputtype,
             ):
