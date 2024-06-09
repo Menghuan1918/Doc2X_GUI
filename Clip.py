@@ -5,6 +5,7 @@ import time
 import logging
 import imagehash
 from PIL import Image
+from urllib.parse import unquote
 
 
 def same_image(image_path, phash):
@@ -15,7 +16,12 @@ def same_image(image_path, phash):
         except:
             return False
     except:
-        return True
+        try:
+            image_path = unquote(image_path)
+            hash = imagehash.phash(Image.open(image_path))
+            return hash == phash
+        except:
+            return False
 
 
 def get_file_path():
@@ -76,7 +82,6 @@ def Linux_pic(pretext):
         except:
             text = pyperclip.paste()
 
-
     try:
         # 去除可能的多余\r\n
         if text.endswith("\r\n"):
@@ -90,6 +95,8 @@ def Linux_pic(pretext):
         if text.startswith("file:///") and text.endswith((".png", ".jpg", ".jpeg")):
             Clip_type = "image"
             text = text[7:]
+            if same_image(text, pretext):
+                Clip_type = "same"
 
         if pretext == text:
             return text, "same"
@@ -112,9 +119,16 @@ if __name__ == "__main__":
     pre = ""
     while True:
         get, type = GetClipboard(pre)
-        print(f"{type}: {get}")
+        print(f"tpye: {type} --> {get}")
         if type == "image":
-            pre = imagehash.phash(Image.open(get))
+            try:
+                pre = imagehash.phash(Image.open(get))
+            except:
+                try:
+                    pre = imagehash.phash(Image.open(unquote(get)))
+                except Exception as e:
+                    print(e)
+                    
         elif type != "same":
             pre = get
         time.sleep(2)

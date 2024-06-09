@@ -32,6 +32,7 @@ from Tools.Config import read_config_file, change_one_config
 from Tools.Doc2x import get_key, file_to_file
 import logging
 import os
+from urllib.parse import unquote
 
 
 # 信号类
@@ -290,9 +291,18 @@ class OCRWidget(QWidget):
             return
 
         get, self.ClipTypr = GetClipboard(self.prevClipboard)
-        print(get, self.ClipTypr)
+        print(f"Get: {get}, Type: {self.ClipTypr}")
         if self.ClipTypr == "image":
-            self.prevClipboard = imagehash.phash(Image.open(get))
+            try:
+                hashcheck = imagehash.phash(Image.open(get))
+                self.prevClipboard = hashcheck
+            except:
+                get = unquote(get)
+                try:
+                    hashcheck = imagehash.phash(Image.open(get))
+                    self.prevClipboard = hashcheck
+                except Exception as e:
+                    logging.error(e)
         elif self.ClipTypr != "same":
             self.prevClipboard = get
 
