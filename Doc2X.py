@@ -24,7 +24,7 @@ from PyQt6.QtCore import (
     QRunnable,
     QThreadPool,
 )
-from Clip import GetClipboard
+from Clip import GetClipboard, Clear_cache
 import imagehash
 from PIL import Image
 from PyQt6.QtWidgets import QLineEdit, QInputDialog, QMessageBox
@@ -32,6 +32,7 @@ from Tools.Config import read_config_file, change_one_config
 from Tools.Doc2x import get_key, file_to_file
 import logging
 import os
+import pyperclip
 from urllib.parse import unquote
 
 
@@ -227,7 +228,7 @@ class OCRWidget(QWidget):
         )
         if file:
             self.FilePath = file
-            items = ["docx", "md", "md_dollar", "latex"]
+            items = ["docx","text", "md", "md_dollar", "latex"]
             item, ok = QInputDialog.getItem(
                 self,
                 self.tr("Output Format"),
@@ -241,9 +242,26 @@ class OCRWidget(QWidget):
                 self.Convert(item)
 
     def copyText(self):
-        self.set_flag()
-        print("Copy Text")
-        pass
+        try:
+            pyperclip.copy(self.textLabel.toPlainText())
+            self.tray.showMessage(
+                self.tr("Doc2X GUI"),
+                self.tr("Text copied to clipboard"),
+                QSystemTrayIcon.MessageIcon.Information,
+                3000,
+            )
+            self.TimeWait_flag = 3
+            self.Block()
+            Clear_cache()
+            self.hide()
+        except Exception as e:
+            logging.error(e)
+            self.tray.showMessage(
+                self.tr("Doc2X GUI"),
+                self.tr("Copy failed, please copy by yourself."),
+                QSystemTrayIcon.MessageIcon.Critical,
+                6000,
+            )
 
     def setAPIKey(self):
         try:
@@ -373,6 +391,7 @@ class OCRWidget(QWidget):
                     self.textLabel.setText(get_text)
                     self.TimeWait_flag = -20 #解锁按钮但是不恢复监听
                     self.Block()
+                    Clear_cache()
                 except Exception as e:
                     self.textLabel.setText(str(e))
             else:
@@ -383,6 +402,7 @@ class OCRWidget(QWidget):
                     else:
                         os.system(f"xdg-open {text}")
                     self.TimeWait_flag = 3
+                    Clear_cache()
                     self.Block()
                     self.hide()
                 except Exception as e:
@@ -415,6 +435,7 @@ class OCRWidget(QWidget):
         self.hide()
         self.TimeWait_flag = 3
         self.Block()
+        Clear_cache()
         self.tray.showMessage(
             self.tr("Doc2X GUI"),
             self.tr("The program will keep running in the system tray."),
@@ -430,6 +451,7 @@ class OCRWidget(QWidget):
                 self.hide()
                 self.TimeWait_flag = 3
                 self.Block()
+                Clear_cache()
                 self.tray.showMessage(
                     self.tr("Doc2X GUI"),
                     self.tr("The program will keep running in the system tray."),

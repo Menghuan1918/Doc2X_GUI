@@ -120,6 +120,17 @@ def GetClipboard(pretext):
         return Linux_pic(pretext)
 
 
+def Clear_cache():
+    place = os.path.expanduser("~") + "/.cache/Doc2X_GUI"
+    for root, dirs, files in os.walk(place):
+        for name in files:
+            try:
+                os.remove(os.path.join(root, name))
+            except:
+                logging.error(f"Failed to remove {os.path.join(root, name)}")
+                pass
+
+
 if __name__ == "__main__":
     import time
 
