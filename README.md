@@ -17,7 +17,7 @@ Doc2X GUI
 [GitHub-last-commit]: https://img.shields.io/github/last-commit/Menghuan1918/Doc2X_GUI
 [PRs-image]: https://img.shields.io/badge/PRs-welcome-pink?style=flat-square
 
-[License-url]: https://github.com/Menghuan1918/Doc2X_GUI/blob/master/LICENSE
+[License-url]: https://github.com/Menghuan1918/Doc2X_GUI/blob/main/LICENSE
 [Releases-url]: https://github.com/Menghuan1918/Doc2X_GUI/releases
 [Commit-url]: https://github.com/Menghuan1918/Doc2X_GUI/commits/master/
 [PRs-url]: https://github.com/Menghuan1918/Doc2X_GUI/pulls
