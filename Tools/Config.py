@@ -2,7 +2,7 @@ import os
 import logging
 import locale
 
-from Tools.DEFAULT import DEFAULT_General_Congig
+from Tools.DEFAULT import DEFAULT_General_Congig,DEFAULT_General_Congig_win
 
 
 def get_default_config(filename):
@@ -10,7 +10,10 @@ def get_default_config(filename):
     Get the default config
     """
     if "General" in filename:
-        return DEFAULT_General_Congig
+        if os.name == "nt":
+            return DEFAULT_General_Congig_win
+        else:
+            return DEFAULT_General_Congig
     return ""
 
 
