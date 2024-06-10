@@ -1,5 +1,6 @@
 import sys
 import os
+import argparse
 from PyQt6.QtWidgets import (
     QApplication,
     QWidget,
@@ -23,6 +24,7 @@ from PyQt6.QtCore import (
     pyqtSignal,
     QRunnable,
     QThreadPool,
+    QTranslator,
 )
 from Clip import GetClipboard, Clear_cache
 import imagehash
@@ -57,7 +59,7 @@ class Doc2X(QRunnable):
             self.file, outputtype, self.key, self.temp_path
         ):
             self.parent.Get.emit(process, text)
-            logging.info(f"Process: {process}, Text: {text}")
+            # logging.info(f"Process: {process}, Text: {text}")
 
 
 # 询问窗口
@@ -144,7 +146,9 @@ class OCRWidget(QWidget):
         self.setWindowTitle(self.tr("Doc2X GUI"))
 
         self.setFont(
-            QFont(self.General_config["font"], int(self.General_config["font_size"]) - 2)
+            QFont(
+                self.General_config["font"], int(self.General_config["font_size"]) - 2
+            )
         )
         self.setWindowIcon(QIcon("icon.png"))
         # 创建控件
@@ -167,7 +171,12 @@ class OCRWidget(QWidget):
         self.TimeWait_flag = 3  # 用于判断是否需要等待
         self.API_Key = ""  # 用于存储API Key
         self.Key_Valid = False  # 用于判断API Key是否有效
-        self.Listen = True  # 用于判断是否需要监听剪切板
+        self.Listen = False  # 用于判断是否需要监听剪切板
+
+        try:
+            self.Listen = self.General_config["Listen"] == "True"
+        except:
+            pass
 
         # 布局
         hbox = QVBoxLayout()
@@ -194,31 +203,57 @@ class OCRWidget(QWidget):
         self.tray.setVisible(True)
         self.tray.activated.connect(self.onTrayActivated)
 
-        # 创建托盘菜单
-        menu = QMenu(self)
-        self.settingsMenu = menu.addMenu(self.tr("Settings"))
-        self.languageMenu = self.settingsMenu.addMenu(self.tr("Language"))
-        self.apiKeyAction = self.settingsMenu.addAction(self.tr("Set API Key"))
-        self.quitAction = menu.addAction(self.tr("Quit"))
-        self.tray.setContextMenu(menu)
-
-        # 连接菜单操作
-        self.quitAction.triggered.connect(QCoreApplication.quit)
-        self.apiKeyAction.triggered.connect(self.setAPIKey)
-
         # 检查剪贴板图片
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.GetClipboardImage)
-        self.timer.start(2000)
+        if self.Listen:
+            self.timer.start(2000)
         self.threadpool = QThreadPool()
 
         # 检查API Key
         self.CheckAPIKey()
 
+        # 创建菜单``
+        self.creare_menu()
+
         try:
-            self.resize(int(self.General_config["width"]), int(self.General_config["height"]))
+            self.resize(
+                int(self.General_config["width"]), int(self.General_config["height"])
+            )
         except:
             pass
+
+    def creare_menu(self):
+        # 创建托盘菜单
+        self.menu = QMenu(self)
+        self.toggle_action = QAction(self.tr("Turn on clipboard monitoring"), self)
+        self.toggle_action.triggered.connect(self.toggle_monitoring)
+        self.menu.addAction(self.toggle_action)
+
+        self.settingsMenu = self.menu.addMenu(self.tr("Settings"))
+        self.languageMenu = self.settingsMenu.addMenu(self.tr("Language"))
+        self.apiKeyAction = self.settingsMenu.addAction(self.tr("Set API Key"))
+        self.quitAction = self.menu.addAction(self.tr("Quit"))
+        self.tray.setContextMenu(self.menu)
+
+        # 切换语言：中/EN
+        self.zhAction = QAction("简体中文", self)
+        self.enAction = QAction("English", self)
+        self.languageMenu.addAction(self.zhAction)
+        self.languageMenu.addAction(self.enAction)
+
+        # 连接菜单操作
+        self.quitAction.triggered.connect(QCoreApplication.quit)
+        self.apiKeyAction.triggered.connect(self.setAPIKey)
+        self.zhAction.triggered.connect(lambda: self.set_language("zh"))
+        self.enAction.triggered.connect(lambda: self.set_language("en"))
+
+    def set_language(self, language):
+        self.retranslateUi(language)
+        if language == "zh":
+            self.zhAction.triggered.disconnect()
+        else:
+            self.enAction.triggered.disconnect()
 
     def openImage(self):
         # 仅允许jpg，png和pdf文件
@@ -228,7 +263,7 @@ class OCRWidget(QWidget):
         )
         if file:
             self.FilePath = file
-            items = ["docx","text", "md", "md_dollar", "latex"]
+            items = ["docx", "text", "md", "md_dollar", "latex"]
             item, ok = QInputDialog.getItem(
                 self,
                 self.tr("Output Format"),
@@ -300,10 +335,11 @@ class OCRWidget(QWidget):
                 self,
                 self.tr("Error"),
                 self.tr(
-                    "The API key acquisition exception may be caused by the key not being set or expired. Please right-click the taskbar icon and select 'Set API Key'."
+                    """The API key acquisition exception may be caused by the key not being set or expired. Please right-click the taskbar icon and select 'Set API Key'.
+                    Please go to the website and select 'personal information' -> 'identity token' to copy it. The website URL has been copied to your clipboard."""
                 ),
             )
-            
+            pyperclip.copy("https://doc2x.noedgeai.com/")
 
     def GetClipboardImage(self):
         if self.TimeWait_flag < -10:
@@ -332,6 +368,35 @@ class OCRWidget(QWidget):
             self.FilePath = get
             self.TimeWait_flag = 0
             self.showNotification()
+
+    def toggle_monitoring(self):
+        self.Listen = not self.Listen
+        change_one_config(
+            filename="General_config", key="Listen", value=str(self.Listen)
+        )
+        if self.Listen:
+            self.timer.start(2000)
+            self.tray.showMessage(
+                self.tr("Doc2X GUI"),
+                self.tr("Clipboard monitoring turned on"),
+                QSystemTrayIcon.MessageIcon.Information,
+                3000,
+            )
+        else:
+            self.timer.stop()
+            self.tray.showMessage(
+                self.tr("Doc2X GUI"),
+                self.tr("Clipboard monitoring turned off"),
+                QSystemTrayIcon.MessageIcon.Information,
+                3000,
+            )
+
+    def update_meau(self):
+        self.toggle_action.setText(
+            self.tr("Turn on clipboard monitoring")
+            if not self.Listen
+            else self.tr("Turn off clipboard monitoring")
+        )
 
     def onTrayActivated(self, reason):
         if reason == QSystemTrayIcon.ActivationReason.Trigger:
@@ -389,7 +454,7 @@ class OCRWidget(QWidget):
                         get_text = f.read()
                     get_text = str(get_text)
                     self.textLabel.setText(get_text)
-                    self.TimeWait_flag = -20 #解锁按钮但是不恢复监听
+                    self.TimeWait_flag = -20  # 解锁按钮但是不恢复监听
                     self.Block()
                     Clear_cache()
                 except Exception as e:
@@ -421,14 +486,22 @@ class OCRWidget(QWidget):
             self.copyButton.setEnabled(True)
             self.textLabel.setEnabled(True)
 
-    def retranslateUi(self):
-        self.setWindowTitle(self.tr("OCR Tool"))
-        self.openButton.setText(self.tr("Select Image"))
-        self.copyButton.setText(self.tr("Copy Text"))
-        self.settingsMenu.setTitle(self.tr("Settings"))
-        self.languageMenu.setTitle(self.tr("Language"))
-        self.apiKeyAction.setText(self.tr("Set API Key"))
-        self.quitAction.setText(self.tr("Quit"))
+    def retranslateUi(self, lau):
+        try:
+            translater = QTranslator()
+            translater.load(f"Doc2X_{lau}.qm")
+            app.installTranslator(translater)
+            change_one_config(filename="General_config", key="lang", value=lau)
+            self.tray.showMessage(
+                self.tr("Doc2X GUI"),
+                self.tr(
+                    "Language changed successfully, please restart the program.\n语言切换成功，请重启程序。"
+                ),
+                QSystemTrayIcon.MessageIcon.Information,
+                3000,
+            )
+        except:
+            logging.error(f"Failed to load {lau} language file.")
 
     def closeEvent(self, event):
         event.ignore()
@@ -436,6 +509,12 @@ class OCRWidget(QWidget):
         self.TimeWait_flag = 3
         self.Block()
         Clear_cache()
+        change_one_config(
+            filename="General_config", key="width", value=str(self.width())
+        )
+        change_one_config(
+            filename="General_config", key="height", value=str(self.height())
+        )
         self.tray.showMessage(
             self.tr("Doc2X GUI"),
             self.tr("The program will keep running in the system tray."),
@@ -444,8 +523,6 @@ class OCRWidget(QWidget):
         )
 
     def changeEvent(self, event):
-        if event.type() == QEvent.Type.LanguageChange:
-            self.retranslateUi()
         if event.type() == QEvent.Type.WindowStateChange:
             if self.windowState() & Qt.WindowState.WindowMinimized:
                 self.hide()
@@ -462,8 +539,22 @@ class OCRWidget(QWidget):
 
 
 if __name__ == "__main__":
+    # 除非设置标示，否则在Wayland环境中使用XWayland
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-wayland", help="Run on Wayland")
+    args = parser.parse_args()
+    if os.environ.get("WAYLAND_DISPLAY") is not None and not args.wayland:
+        os.environ["QT_QPA_PLATFORM"] = "xcb"
+
     config = read_config_file("General_config")
     app = QApplication(sys.argv)
+    try:
+        translater = QTranslator()
+        translater.load(f"Doc2X_{config['lang']}.qm")
+        app.installTranslator(translater)
+    except:
+        logging.error(f"Failed to load {config['lang']} language file.")
+
     ex = OCRWidget()
     ex.hide()
     sys.exit(app.exec())

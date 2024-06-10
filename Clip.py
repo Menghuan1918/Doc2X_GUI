@@ -128,7 +128,11 @@ def Clear_cache():
                 os.remove(os.path.join(root, name))
             except:
                 logging.error(f"Failed to remove {os.path.join(root, name)}")
-                pass
+        for name in dirs:
+            try:
+                os.rmdir(os.path.join(root, name))
+            except:
+                logging.error(f"Failed to remove {os.path.join(root, name)}")
 
 
 if __name__ == "__main__":
