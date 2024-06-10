@@ -97,7 +97,7 @@ class Ask(QWidget):
             self.move(config["Ask_x"], config["Ask_y"])
         except:
             self.move(
-                screen_geometry.width() - self.width() - 50,
+                screen_geometry.width() - self.width() - 100,
                 screen_geometry.height() - self.height() - 400,
             )
         self.autohide = QTimer()
@@ -151,6 +151,7 @@ class OCRWidget(QWidget):
             )
         )
         self.setWindowIcon(QIcon("icon.png"))
+
         # 创建控件
         self.imageLabel = QLabel()
         self.textLabel = QTextEdit()
@@ -159,6 +160,8 @@ class OCRWidget(QWidget):
         )
         self.openButton = QPushButton(self.tr("Select File"))
         self.copyButton = QPushButton(self.tr("Copy Text"))
+        self.getfromClip = QPushButton(self.tr("Get picture from Clipboard"))
+        self.getHistory = QPushButton(self.tr("OCR History"))
         self.progressBar = QProgressBar()
         self.progressBar.setRange(0, 100)
         self.progressBar.setValue(0)
@@ -188,14 +191,20 @@ class OCRWidget(QWidget):
         layout_3 = QHBoxLayout()
         layout_3.addWidget(self.openButton)
         layout_3.addWidget(self.copyButton)
+        layout_4 = QHBoxLayout()
+        layout_4.addWidget(self.getfromClip)
+        layout_4.addWidget(self.getHistory)
         hbox.addLayout(layout_1)
         hbox.addLayout(layout_2)
         hbox.addLayout(layout_3)
+        hbox.addLayout(layout_4)
         self.setLayout(hbox)
 
         # 连接信号和槽
         self.openButton.clicked.connect(self.openImage)
         self.copyButton.clicked.connect(self.copyText)
+        self.getfromClip.clicked.connect(self.get_fromClip)
+        self.getHistory.clicked.connect(self.get_history)
 
         # 创建系统托盘图标
         self.tray = QSystemTrayIcon(self)
@@ -213,7 +222,7 @@ class OCRWidget(QWidget):
         # 检查API Key
         self.CheckAPIKey()
 
-        # 创建菜单``
+        # 创建菜单
         self.creare_menu()
 
         try:
@@ -223,10 +232,31 @@ class OCRWidget(QWidget):
         except:
             pass
 
+    def get_fromClip(self):
+        get, self.ClipTypr = GetClipboard(self.prevClipboard)
+        if self.ClipTypr == "image":
+            self.FilePath = get
+            self.Convert("text")
+        else:
+            self.tray.showMessage(
+                self.tr("Doc2X GUI"),
+                self.tr("No image found in clipboard"),
+                QSystemTrayIcon.MessageIcon.Information,
+                3000,
+            )
+
+    def get_history(self):
+        if os.name == "nt":
+            os.system("start https://doc2x.noedgeai.com/")
+        else:
+            os.system("xdg-open https://doc2x.noedgeai.com/")
+        self.hide()
+        self.TimeWait_flag = 3
+
     def creare_menu(self):
         # 创建托盘菜单
         self.menu = QMenu(self)
-        self.toggle_action = QAction(self.tr("Turn on clipboard monitoring"), self)
+        self.toggle_action = QAction(self.tr("Toggle Clipboard Listening State"), self)
         self.toggle_action.triggered.connect(self.toggle_monitoring)
         self.menu.addAction(self.toggle_action)
 
@@ -349,7 +379,7 @@ class OCRWidget(QWidget):
             return
 
         get, self.ClipTypr = GetClipboard(self.prevClipboard)
-        print(f"Get: {get}, Type: {self.ClipTypr}")
+        # print(f"Get: {get}, Type: {self.ClipTypr}")
         if self.ClipTypr == "image":
             try:
                 hashcheck = imagehash.phash(Image.open(get))
@@ -427,7 +457,6 @@ class OCRWidget(QWidget):
             pixmap = QPixmap(self.FilePath)
         pixmap = pixmap.scaled(600, 400, Qt.AspectRatioMode.KeepAspectRatio)
         self.imageLabel.setPixmap(pixmap)
-        self.imageLabel.setScaledContents(True)
         self.imageLabel.setMaximumSize(600, 400)
         self.textLabel.setText(self.tr("Converting...Please wait."))
         self.textLabel.setFixedSize(500, 400)
@@ -539,6 +568,13 @@ class OCRWidget(QWidget):
 
 
 if __name__ == "__main__":
+    logfile = os.path.expanduser("~") + "/.config/DOC2X_GUI/Doc2X_GUI.log"
+    os.makedirs(os.path.dirname(logfile), exist_ok=True)
+    logging.basicConfig(
+        filename=logfile,
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+    )
     # 除非设置标示，否则在Wayland环境中使用XWayland
     parser = argparse.ArgumentParser()
     parser.add_argument("-wayland", help="Run on Wayland")
