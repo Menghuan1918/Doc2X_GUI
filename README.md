@@ -49,6 +49,12 @@ Doc2X GUI
 # 下载
 你可以从[Release](https://github.com/Menghuan1918/Doc2X_GUI/releases)下载对应系统的安装包。
 
+对于Arch用户，你可以从[AUR](https://aur.archlinux.org/packages/doc2xgui-git)下载：
+```bash
+paru -S doc2xgui-git
+#yay -S doc2xgui-git
+```
+
 或者你也可以从源码运行：
 ```bash
 conda create -n doc2x python=3.12
