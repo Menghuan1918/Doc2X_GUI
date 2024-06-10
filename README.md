@@ -43,6 +43,9 @@ Doc2X GUI
 
 [windows.webm](https://github.com/Menghuan1918/Doc2X_GUI/assets/122662527/c28aedb9-5eb0-47ed-9f0b-c994082072d7)
 
+![图片](https://github.com/Menghuan1918/Doc2X_GUI/assets/122662527/47596a8f-b363-4038-ac98-ec8b06e62c6a)
+
+
 # 下载
 你可以从[Release](https://github.com/Menghuan1918/Doc2X_GUI/releases)下载对应系统的安装包。
 
