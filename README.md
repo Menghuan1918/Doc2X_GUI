@@ -32,7 +32,8 @@ Doc2X GUI
 - 支持从剪切板复制图片解析
 
 > [!NOTE]
-> 如你不需要监听剪切板/从剪切板粘贴图片的功能，你可以在AUR上使用@asukaminato0721的[Dox2X官方Windows的移植版](https://aur.archlinux.org/packages/doc2x)
+> 如你不需要监听剪切板/从剪切板粘贴图片的功能，你可以在AUR上使用 [@asukaminato0721](https://github.com/asukaminato0721) 的[Dox2X官方Windows的移植版](https://aur.archlinux.org/packages/doc2x)
+
 
 > [!IMPORTANT]
 > 为了监听剪切板，Linux用户需要安装`xclip`
