@@ -478,7 +478,7 @@ class OCRWidget(QWidget):
         elif pocess > 100:
             if self.outputtype == "text":
                 try:
-                    path = f"{text}/{os.path.basename(text)}.md"
+                    path = f"{text}/{os.path.basename(text)}_md_dollar.md"
                     with open(path, "r") as f:
                         get_text = f.read()
                     get_text = str(get_text)

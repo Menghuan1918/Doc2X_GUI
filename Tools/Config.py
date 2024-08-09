@@ -2,7 +2,7 @@ import os
 import logging
 import locale
 
-from Tools.DEFAULT import DEFAULT_General_Congig,DEFAULT_General_Congig_win
+from Tools.DEFAULT import DEFAULT_General_Congig, DEFAULT_General_Congig_win
 
 
 def get_default_config(filename):
@@ -28,7 +28,7 @@ def read_config_file(filename):
             for line in file:
                 line = line.strip()
                 if line and not line.startswith("#"):
-                    key, value = line.split("=")
+                    key, value = line.split("=", 1)
                     config[key.strip()] = value.strip().strip('"')
                     logging.info(f"Read config: {key}={value}")
     except FileNotFoundError:
